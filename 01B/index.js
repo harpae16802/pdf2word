@@ -12,20 +12,30 @@ const upload = multer({ dest: 'uploads/' });
 
 app.use(cors());
 
+// 支持的格式映射
+const supportedFormats = {
+    'docx': ['pdf', 'txt', 'png', 'csv'],
+    'pdf': ['docx', 'txt', 'png', 'csv'],
+    'txt': ['docx', 'pdf', 'png', 'csv'],
+    'csv': ['docx', 'pdf', 'txt', 'png']
+};
+
 app.post('/api/convert', upload.single('file'), async (req, res) => {
     const file = req.file;
-    const format = req.body.format;
+    const targetFormat = req.body.format;
 
     if (!file) {
+        console.error('No file uploaded.');
         return res.status(400).send('No file uploaded.');
     }
 
     const filePath = path.join(__dirname, file.path);
     const originalFilename = file.originalname;
-    const outputPath = path.join(__dirname, `uploads/${file.filename}.${format}`);
+    const inputFormat = path.extname(originalFilename).substring(1).toLowerCase();
 
-    if (format !== 'docx') {
-        return res.status(400).send('Unsupported format.');
+    if (!supportedFormats[inputFormat] || !supportedFormats[inputFormat].includes(targetFormat)) {
+        console.error('Unsupported format conversion.');
+        return res.status(400).send('Unsupported format conversion.');
     }
 
     try {
@@ -37,7 +47,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
                 'convert-my-file': {
                     operation: 'convert',
                     input: 'import-my-file',
-                    output_format: format,
+                    output_format: targetFormat,
                 },
                 'export-my-file': {
                     operation: 'export/url',
@@ -53,9 +63,6 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
 
         const uploadTask = createJobResponse.data.data.tasks.find(task => task.name === 'import-my-file');
         console.log('Upload Task:', uploadTask);
-
-        // 打印上传表单参数
-        console.log('Upload Form Parameters:', uploadTask.result.form.parameters);
 
         const formData = new FormData();
         for (const [key, value] of Object.entries(uploadTask.result.form.parameters)) {
